@@ -1,0 +1,35 @@
+<assembly>
+  <id>bin</id>
+  <formats>
+    <format>zip</format>
+  </formats>
+  <dependencySets>
+    <dependencySet>
+      <useProjectArtifact>true</useProjectArtifact>
+      <outputDirectory>lib</outputDirectory>
+    </dependencySet>
+  </dependencySets>
+  <fileSets>
+    <fileSet>
+      <outputDirectory>/</outputDirectory>
+      <includes>
+        <include>README.txt</include>
+      </includes>
+    </fileSet>
+    <fileSet>
+      <directory>src/main/resources</directory>
+      <outputDirectory>/conf</outputDirectory>
+      <includes>
+        <include>*.properties</include>
+      </includes>
+    </fileSet>
+    <fileSet>
+      <directory>src/main/scripts</directory>
+      <outputDirectory>/bin</outputDirectory>
+      <includes>
+        <include>start.sh</include>
+        <include>start.bat</include>
+      </includes>
+    </fileSet>
+  </fileSets>
+</assembly>
