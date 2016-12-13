@@ -1,0 +1,6 @@
+{
+    "name": "binlogreader",
+    "class": "com.nascent.pipeline.datax.mysql.KafkaBinlogBatchReader",
+    "description": "reading query event from kafka, then trigger select query into records",
+    "developer": "craboyang"
+}

@@ -1,0 +1,49 @@
+{
+    "job": {
+        "setting": {
+            "speed": {
+                "channel":1
+            },
+            "errorLimit": {
+                "record": 0
+            }
+        },
+        "content": [
+            {
+				"reader": {
+					"name": "binlogreader",
+					"parameter": {
+                        "topics":"binlog2_slot",
+                        "fetchSize":1000,
+                        "batch_interval_sec":10,
+                        "tsStart":"2014-12-01 00:00:01.000",
+                        
+						"username": "****",
+						"password": "",
+                        "jdbcUrl": "jdbc:mysql://192.168.1.240:3306/tradedata",
+                        "querySql": "select Nick,CreateTime,  CustomerName,  UserType,  Sex,  RegisterTime,  LastVisitTime,  Birthday,  Mobile,  QQ,  Score,  GoodCount,  NeutralCount,  BadCount,  MemberGrade,  MemberStatus,  VipInfo,  PriceUnit,  CountUnit,  ItemUnit,  Zip,  Province,  City,  Country,  District, BuyerImpression,  BuyerLevel,  RefundTimes,  RefundAmount,  CustomerFrom,  LatestCallOnTime,  Remark,  OrderTimes,  OrderAmount,  LastOrderTime,  PayTimes,  PayAmount,  LastPayTime,  TradeTimes,  TradeAmount,  LastTradeTime,  SmsTimes,  LastSmsTime,  SmsRate,  EmailTimes,  LastEmailTime,  EmailRate,  JhsTimes,  StepTimes,  StepAmount,  FirstPayTime,  SecondPayTime,  FirstJoinTime ,'$database' as dbName
+FROM kd_customer c where c.CreateTime>='$ts_start' limit 1100 "
+					}
+				},"writer": {
+				    "name": "binlogwriter",
+				    "parameter": {
+                        "batchSize":1000,
+                        "parseArray":false,
+                        "index_auth":null,
+                        "date_field":1,
+                        "month_per_shard":12,
+                        
+                        "writeMode": "index",
+                        "index":"crm-trade",
+                        "document":"customer",
+                        "column": [
+                            "_id","CreateTime",  "CustomerName",  "UserType",  "Sex",  "RegisterTime",  "LastVisitTime",  "Birthday",  "Mobile",  "QQ",  "Score",  "GoodCount",  "NeutralCount",  "BadCount",  "MemberGrade",  "MemberStatus",  "VipInfo",  "PriceUnit",  "CountUnit",  "ItemUnit",  "Zip",  "Province",  "City",  "Country",  "District",  "BuyerImpression",  "BuyerLevel",  "RefundTimes",  "RefundAmount",  "CustomerFrom",  "LatestCallOnTime",  "Remark",  "OrderTimes",  "OrderAmount",  "LastOrderTime",  "PayTimes",  "PayAmount",  "LastPayTime",  "TradeTimes",  "TradeAmount",  "LastTradeTime",  "SmsTimes",  "LastSmsTime",  "SmsRate",  "EmailTimes",  "LastEmailTime",  "EmailRate",  "JhsTimes",  "StepTimes",  "StepAmount",  "FirstPayTime",  "SecondPayTime",   "FirstJoinTime"
+                        ],
+                        "host":["localhost:9200"]
+					}
+				}
+            }
+        ]
+    }
+}
+

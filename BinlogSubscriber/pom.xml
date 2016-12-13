@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.nascent.pipeline</groupId>
+  <artifactId>mysql-binlog-subscriber</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+  
+  <description>rule engine to subscribe CDC events from mysql</description>
+  <name>Mysql binlog subscriber</name>
+
+  <properties>
+  	<java.version>1.8</java.version>
+  </properties>
+  <dependencies>
+  	<dependency>
+	    <groupId>org.apache.kafka</groupId>
+	    <artifactId>kafka-clients</artifactId>
+	    <version>0.10.1.0</version>
+	</dependency>
+	<dependency>
+		<groupId>com.alibaba</groupId>
+		<artifactId>fastjson</artifactId>
+		<version>1.2.9</version>
+		<optional>true</optional>
+	</dependency>
+	
+	<dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <version>5.1.38</version>
+    </dependency>
+	<dependency>
+	    <groupId>org.apache.commons</groupId>
+	    <artifactId>commons-lang3</artifactId>
+	    <version>3.5</version>
+	</dependency>
+    
+    <dependency>
+        <groupId>com.alibaba.datax</groupId>
+        <artifactId>datax-common</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <scope>system</scope>
+        <systemPath>${project.basedir}/lib/datax-common-0.0.1-SNAPSHOT.jar</systemPath>
+    </dependency>
+    
+    
+  <dependency>
+      <groupId>ognl</groupId>
+      <artifactId>ognl</artifactId>
+      <version>3.1.12</version>
+      <scope>compile</scope>
+      <exclusions>
+         <exclusion>
+            <groupId>javassist</groupId>
+            <artifactId>javassist</artifactId>
+         </exclusion>
+      </exclusions>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>1.7.21</version>
+		<optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-log4j12</artifactId>
+      <version>1.7.21</version>
+		<optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+      <version>4.12</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+  <plugins>
+  		<plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-compiler-plugin</artifactId>
+              <version>3.5.1</version>
+              <configuration>
+                  <source>${java.version}</source>
+                  <target>${java.version}</target>
+                  <encoding>UTF-8</encoding>
+                  <optimize>true</optimize>
+                  <showDeprecation>true</showDeprecation>
+                  <showWarnings>true</showWarnings>
+                  <compilerArgument>-Xlint:all,-serial,-path,-rawtypes,-unchecked</compilerArgument>
+              </configuration>
+          </plugin>
+          
+          <plugin>
+		    <artifactId>maven-source-plugin</artifactId>
+		    <version>3.0.0</version>
+		    <executions>
+		        <execution>
+		            <phase>package</phase>
+		            <goals><goal>jar-no-fork</goal></goals>
+		        </execution>
+		    </executions>
+		</plugin>
+		
+		<plugin>
+		    <groupId>org.apache.maven.plugins</groupId>
+		    <artifactId>maven-assembly-plugin</artifactId>
+		    <configuration>
+		      <descriptors>
+		        <descriptor>src/main/assembly.xml</descriptor>
+		      </descriptors>
+		    </configuration>
+		    <executions>
+		      <execution>
+		        <id>make-assembly</id>
+		        <phase>package</phase>
+		        <goals>
+		          <goal>single</goal>
+		        </goals>
+		      </execution>
+		    </executions>
+		  </plugin>
+  </plugins> 
+  </build>
+
+</project>

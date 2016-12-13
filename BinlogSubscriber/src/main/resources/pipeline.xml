@@ -1,0 +1,28 @@
+<root topics="default_slot">
+	<event database="*" table="SQL" type="QUERY">
+		<if><transform type="sql" process="customer.select" /></if>
+	</event>
+	<event database="*" table="kd_customer" type="update">
+		<if test="#name==null">
+			<transform type="">
+				<bind name="name" value="#id+'_A1'"/>
+				<map name="_id" value="#shopId+#tradeId+#nick"/>
+				<map name="_time" value="updateTime"/>
+			</transform>
+		</if>
+		<else>
+			<transform type="sql" process="select * from $database.customer
+			where id=#id">
+				<bind name="_id" value="#shopId+#tradeId+#nick"/>
+				<bind name="_time" value="updateTime"/>
+			</transform>
+		</else>
+	</event>
+	<event database="lppz" table="kd_customer" type="delete">
+		<transform type="resultset" process="select * from $database.customer
+			where id=#id">
+				<map name="_id" value="#shopId+#tradeId+#nick"/>
+				<map name="_time" value="updateTime"/>
+			</transform>
+	</event>
+</root>
