@@ -112,6 +112,12 @@ public enum MysqlType {
       return Field.create(Type.STRING, value);
     }
   },
+  CHAR("char") {
+    @Override
+    public Field toField(Object value) {
+      return Field.create(Type.STRING, value);
+    }
+  },
   ENUM("enum") {
     @Override
     public Field toField(Object value) {

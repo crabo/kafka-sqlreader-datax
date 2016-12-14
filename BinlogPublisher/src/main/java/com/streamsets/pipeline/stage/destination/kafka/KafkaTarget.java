@@ -12,12 +12,16 @@ import java.util.Properties;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSONObject;
 import com.streamsets.pipeline.api.Record;
 import com.streamsets.pipeline.sdk.record.MapRecordImpl;
+import com.streamsets.pipeline.stage.origin.mysql.MysqlSource;
 
 public class KafkaTarget {//extends Thread 
+	private static final Logger LOG = LoggerFactory.getLogger(KafkaTarget.class);
 	private Producer<String, String> producer;
 	private BlockingQueue<Record> queue;
 	private Message kafkaMessage;
@@ -33,7 +37,7 @@ public class KafkaTarget {//extends Thread
 			props.load(in);
 			in.close();
 		} catch (IOException e) {
-			e.printStackTrace();
+			LOG.warn("loading conf kafka.properties error",e);
 		}
 		
 		this.producer = new KafkaProducer<String, String>(props);
@@ -44,7 +48,15 @@ public class KafkaTarget {//extends Thread
 		queue.put(rec);
 	}
 	
+	int i=0;
 	public void send(List<Record> batch,String lastSourceOffset) {
+		i++;
+		if(i>30){
+			i=0;
+			if(LOG.isInfoEnabled()){
+		    	LOG.info("send binlog to kafka with {} records @{}",batch.size(),lastSourceOffset);
+		    }
+		}
 		send(batch.iterator());
 		kafkaMessage.updateGtid(lastSourceOffset);
 	}
@@ -83,6 +95,8 @@ public class KafkaTarget {//extends Thread
 			} catch(InterruptedException interruptedException) {
 				interruptedException.printStackTrace();
 			}
+	    	LOG.error("send to kafka failed!!",e);
+		    
 			System.exit(-1);
 		}
 	}
@@ -110,6 +124,7 @@ public class KafkaTarget {//extends Thread
 				}
 				return;
 			} catch(Exception e) {
+				LOG.error("send to kafka failed!!",e);
 				try {
 					Thread.sleep(3000);
 				} catch(InterruptedException interruptedException) {

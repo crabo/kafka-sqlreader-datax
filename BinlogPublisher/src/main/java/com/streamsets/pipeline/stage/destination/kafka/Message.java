@@ -1,6 +1,7 @@
 package com.streamsets.pipeline.stage.destination.kafka;
 
 import java.io.BufferedWriter;
+import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,7 +11,6 @@ import java.util.Map.Entry;
 import java.util.Properties;
 
 import com.alibaba.fastjson.JSONObject;
-import com.streamsets.pipeline.api.Record;
 
 public class Message {
 	//map<database,topic> 
@@ -21,8 +21,8 @@ public class Message {
 	public Message() {
 		this.props = new Properties();
 		//new FileInputStream(path)
-		InputStream in = getClass().getResourceAsStream("/mysql.properties");
 		try {
+			InputStream in = new FileInputStream("conf/mysql.properties");
 			props.load(in);
 		} catch (IOException e) {
 			e.printStackTrace();

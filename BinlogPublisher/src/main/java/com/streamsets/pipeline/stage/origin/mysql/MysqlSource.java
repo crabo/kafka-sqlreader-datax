@@ -62,6 +62,7 @@ public abstract class MysqlSource extends BaseSource {
 
   private Filter eventFilter;
 
+  private int maxWaitTime;
   private int port;
   private long serverId;
 
@@ -81,6 +82,7 @@ public abstract class MysqlSource extends BaseSource {
   @Override
   protected List<ConfigIssue> init() {
     List<ConfigIssue> issues = super.init();
+    this.maxWaitTime = getConfig().maxWaitTime;
 
     // Validate the port number
     try {
@@ -223,14 +225,14 @@ public abstract class MysqlSource extends BaseSource {
     int recordCounter = 0;
     int batchSize = getConfig().maxBatchSize > maxBatchSize ? maxBatchSize : getConfig().maxBatchSize;
     long startTime = System.currentTimeMillis();
-    while (recordCounter < batchSize && (startTime + getConfig().maxWaitTime) > System.currentTimeMillis()) {
-      long timeLeft = getConfig().maxWaitTime - (System.currentTimeMillis() - startTime);
+    while (recordCounter < batchSize && (startTime + this.maxWaitTime) > System.currentTimeMillis()) {
+      long timeLeft = this.maxWaitTime - (System.currentTimeMillis() - startTime);
       if (timeLeft < 0) {
         break;
       }
       EnrichedEvent event = eventBuffer.poll(timeLeft, TimeUnit.MILLISECONDS);
       // check errors
-      handleErrors();
+	  handleErrors();
 
       if (event != null) {
         // move offset no matter if event is filtered out

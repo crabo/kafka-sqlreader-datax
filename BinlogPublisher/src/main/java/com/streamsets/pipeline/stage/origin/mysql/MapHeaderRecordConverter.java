@@ -20,11 +20,16 @@
 package com.streamsets.pipeline.stage.origin.mysql;
 
 import java.io.Serializable;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.shyiko.mysql.binlog.event.DeleteRowsEventData;
 import com.github.shyiko.mysql.binlog.event.EventHeader;
@@ -41,6 +46,8 @@ import com.streamsets.pipeline.stage.origin.mysql.schema.ColumnValue;
 import com.streamsets.pipeline.stage.origin.mysql.schema.Table;
 
 public class MapHeaderRecordConverter  implements RecordConvert {
+	private static final Logger LOG = LoggerFactory.getLogger(MapHeaderRecordConverter.class);
+	
   static final String TYPE_FIELD = "Type";
   static final String DATABASE_FIELD = "Database";
   static final String TABLE_FIELD = "Table";
@@ -64,31 +71,65 @@ public class MapHeaderRecordConverter  implements RecordConvert {
 	  if(intervalEventMs<100) intervalEventMs=100;
 	  this.mergeEventMs = intervalEventMs;
   }
+  
+  public static class ExecutingInfo{
+		public String database;
+		public EnrichedEvent event;
+		
+		public long addedTime;
+		public ExecutingInfo(String database,EnrichedEvent event){
+			this.database=database;
+			this.event=event;
+			this.addedTime=System.currentTimeMillis();
+		}
+		
+		@Override
+	    public int hashCode() {
+	        return database.hashCode();
+	    }
+	    @Override
+	    public boolean equals(Object obj) {
+	        return obj.hashCode()==this.hashCode();
+	    }
+	}
 
-  Map<String,Long> SendingRecords=new HashMap<>();
-  /**
+  ArrayDeque<ExecutingInfo> SendingRecords=new ArrayDeque<>();
+  /** by crabo !!!
    * 同一table的事件，3秒内重复的都合并为一个事件
    * @param event
    * @return
    */
-  boolean isWaitLongEnough(EnrichedEvent event){
+  public List<Record> toRecords(EnrichedEvent event){
 	  Table tbl = event.getTable();
 	  String key=tbl.getDatabase()+tbl.getName();
 	  
-	  long timestamp = event.getEvent().getHeader().getTimestamp();
-	  if(!SendingRecords.containsKey(key)
-			  ||timestamp - SendingRecords.get(key)>mergeEventMs){
+	  ExecutingInfo exec = new ExecutingInfo(key,event);
+	  if(!SendingRecords.contains(exec))
+		  SendingRecords.add(exec);
+	  
+	  List<Record> li =null;
+	  exec = SendingRecords.peek();
+	  while(exec!=null &&
+			  System.currentTimeMillis()-exec.addedTime>mergeEventMs){
+		  if(li==null)
+			  li = doToRecords(SendingRecords.pop().event);
+		  else{
+			  li.addAll(doToRecords(SendingRecords.pop().event));
+		  }
 		  
-		  SendingRecords.put(key, timestamp);
-		  return true;
+		  exec = SendingRecords.peek();
 	  }
-	  return false;
+	  return li;
   }
   
-  public List<Record> toRecords(EnrichedEvent event) {
-	if(!isWaitLongEnough(event)) return null;
+  private List<Record> doToRecords(EnrichedEvent event) {
 	
     EventType eventType = event.getEvent().getHeader().getEventType();
+    if(LOG.isDebugEnabled()){
+    	LOG.debug("binlog event '{}' at {}.{}@{}",eventType,
+    			event.getTable().getDatabase(),event.getTable().getName(),
+    			event.getEvent().getHeader().getTimestamp());
+    }
     switch (eventType) {
       case PRE_GA_WRITE_ROWS:
       case WRITE_ROWS:

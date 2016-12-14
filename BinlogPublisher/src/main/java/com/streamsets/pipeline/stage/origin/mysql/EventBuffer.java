@@ -75,6 +75,10 @@ public class EventBuffer {
       return false;
     }
   }
+  
+  public int size(){
+	  return queue.size();
+  }
 
   public void close() {
     closed = true;

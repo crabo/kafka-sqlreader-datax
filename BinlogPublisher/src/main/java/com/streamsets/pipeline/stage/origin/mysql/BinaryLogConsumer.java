@@ -76,7 +76,8 @@ public class BinaryLogConsumer implements EventListener {
 
   @Override
   public void onEvent(Event event) {
-    LOG.trace("Received event {}", event);
+	  if(LOG.isTraceEnabled())
+		  LOG.trace("Received event {}", event);
     EventType eventType = event.getHeader().getEventType();
     switch (eventType) {
       case TABLE_MAP:
@@ -106,14 +107,14 @@ public class BinaryLogConsumer implements EventListener {
           schemaRepository.evictAll();
         }
         
-        /*by crabo skip begin/commit*/
+        /*by crabo BINLOG MIXED MODE .skip begin/commit
         if(query.length()>8){
 	        TableWithoutColumnsNames table = new TableWithoutColumnsNames(queryEventData.getDatabase(), "SQL");
 	        EnrichedEvent enrichedEvent = new EnrichedEvent(event, table, createOffset(event));
 	        if (!eventBuffer.put(enrichedEvent)) {
 	        	
 	        }
-        }
+        }*/
         break;
       case XID:
         finishTx();
@@ -150,7 +151,8 @@ public class BinaryLogConsumer implements EventListener {
   }
 
   private void handleRowEvent(Event event, long tableId) {
-    LOG.trace("New event, current offset: {}, event: {}", currentOffset, event);
+	  if(LOG.isTraceEnabled())
+		  LOG.trace("New event, current offset: {}, event: {}", currentOffset, event);
     currentTxEventSeqNo++;
 
     // for gtid offsets it is impossible to position client to precise position (it always positions to tx beginning)
@@ -177,11 +179,15 @@ public class BinaryLogConsumer implements EventListener {
     if (tableOpt.isPresent()) {
       table = tableOpt.get();
     } else {
+    	if("mysql".equals(tableName.getDatabase()))//by crabo
+    		return;
+    	
       LOG.error(Errors.MYSQL_002.getMessage(), tableName.getDatabase(), tableName.getTable());
       // fallback to table without columns names
       table = new TableWithoutColumnsNames(tableName.getDatabase(), tableName.getTable());
     }
     EnrichedEvent enrichedEvent = new EnrichedEvent(event, table, currentOffset);
+    
     if (!eventBuffer.put(enrichedEvent)) {
       LOG.error("Error adding event to buffer. Closing event buffer, disconnecting client.");
       eventBuffer.close();

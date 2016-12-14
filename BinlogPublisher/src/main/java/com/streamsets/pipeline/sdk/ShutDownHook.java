@@ -1,9 +1,9 @@
 package com.streamsets.pipeline.sdk;
 
 public class ShutDownHook implements  Runnable  {
-	final Bootstrap instance;
+	final StageRunner instance;
 
-    public ShutDownHook(Bootstrap runner ){
+    public ShutDownHook(StageRunner runner ){
         super();
         this.instance = runner;
         Runtime.getRuntime().addShutdownHook(new Thread(this)); 
