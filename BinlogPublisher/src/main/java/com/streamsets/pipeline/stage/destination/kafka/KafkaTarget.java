@@ -27,7 +27,7 @@ public class KafkaTarget {//extends Thread
 	private Message kafkaMessage;
 	
 	public KafkaTarget() {
-		this.queue = new BlockingQueue<Record>(100);
+		//this.queue = new BlockingQueue<Record>(100);
 		
 		Properties props = new Properties();
 		//new FileInputStream(path)
@@ -48,13 +48,18 @@ public class KafkaTarget {//extends Thread
 		queue.put(rec);
 	}
 	
-	int i=0;
+	long tsBegin=System.currentTimeMillis();
+	int count=0,i=0;
 	public void send(List<Record> batch,String lastSourceOffset) {
-		i++;
-		if(i>30){
-			i=0;
-			if(LOG.isInfoEnabled()){
-		    	LOG.info("send binlog to kafka with {} records @{}",batch.size(),lastSourceOffset);
+		if(LOG.isInfoEnabled()){
+			i++;
+			count= count+batch.size();
+		
+			if(i>30){
+		    	LOG.info("-- sending speed {} rows/sec, {} records --",count*1000/(System.currentTimeMillis()-tsBegin) ,count);
+		    	
+		    	i=0;count=0;
+		    	tsBegin=System.currentTimeMillis();
 		    }
 		}
 		send(batch.iterator());

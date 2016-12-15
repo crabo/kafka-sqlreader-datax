@@ -36,26 +36,36 @@ public class BatchExecutingInfo {
 	final ArrayBlockingQueue<ExecutingInfo> queue;
 	final KafkaBinlogBatchReader.Task task;
 	final int batch_interval_ms;
-	public BatchExecutingInfo(KafkaBinlogBatchReader.Task task,int batchMs){
-		this.queue=new ArrayBlockingQueue<>(100);//足够多的待处理数据，防止<10s 的同一msg先后出入队列；
+	public BatchExecutingInfo(KafkaBinlogBatchReader.Task task,int batchMs,int readBatchSize){
+		this.queue=new ArrayBlockingQueue<>(readBatchSize);//足够多的待处理数据，防止<10s 的同一msg先后出入队列；
 		this.task = task;
 		this.batch_interval_ms = batchMs;//合并10s内的多个请求
 		
 		startDaemon();
 	}
 	
-	public void addTaskIfAbsent(String database,long timestamp){
+	int i=0;
+	public boolean addTaskIfAbsent(String database,long timestamp){
 		ExecutingInfo info = new ExecutingInfo(database,timestamp);
 		if(!queue.contains(info))
 		{
 			try {
 				queue.put(info);//持续等待，直至队列数<100
-				if(LOGGER.isDebugEnabled())
+				i++;
+				
+				if(i>100){
+					i=0;
+					
+					LOGGER.info("added kafka message {}@{}",database,timestamp);
+				}else if(LOGGER.isDebugEnabled())
 					LOGGER.debug("added kafka message {}@{}",database,timestamp);
+				
+				return true;
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
 		}
+		return false;
 	}
 	
 	/**

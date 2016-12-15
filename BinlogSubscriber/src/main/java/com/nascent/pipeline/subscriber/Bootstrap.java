@@ -101,7 +101,7 @@ public class Bootstrap {
 	
 	void init(){
 		
-		KafkaBinlogConsumer.using("binlog2_slot".split(";"), json->{
+		KafkaBinlogConsumer.using(1,"binlog2_slot".split(";"), json->{
 			System.out.print(json.getString("KafkaTopic")+json.getLong("KafkaOffset"));
 		}).run();
 	}

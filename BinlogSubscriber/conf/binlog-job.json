@@ -14,10 +14,11 @@
 					"name": "binlogreader",
 					"parameter": {
                         "topics":"binlog2_slot",
-                        "fetchSize":1000,
+                        "kafkaBatchSize":10,
                         "batch_interval_sec":10,
                         "tsStart":"2014-12-01 00:00:01.000",
                         
+                        "fetchSize":1000,
 						"username": "****",
 						"password": "",
                         "jdbcUrl": "jdbc:mysql://192.168.1.240:3306/tradedata",

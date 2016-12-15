@@ -1,6 +1,0 @@
-{
-    "name": "binlogreader",
-    "class": "com.nascent.pipeline.datax.mysql.KafkaBinlogBatchReader",
-    "description": "监听 Database.Table 上的事件，关键表发生变化时触发基于时间的批量语句select",
-    "developer": "crabo"
-}

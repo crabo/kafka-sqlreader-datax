@@ -31,13 +31,13 @@ public class KafkaBinlogConsumer implements Runnable{
 	
 	private final Consumer<JSONObject> eventsConsumer;
 	
-	 public static KafkaBinlogConsumer using(String[] topics,Consumer<JSONObject> channel) {
-		 return new KafkaBinlogConsumer(1000, Arrays.asList(topics),channel);
+	 public static KafkaBinlogConsumer using(int threadId,String[] topics,Consumer<JSONObject> channel) {
+		 return new KafkaBinlogConsumer(threadId,1000, Arrays.asList(topics),channel);
     }
 
 	
 	KafkaConsumer<String,String> consumer;
-	private KafkaBinlogConsumer(long timeout,Collection<String> topics,Consumer<JSONObject> channel) {
+	private KafkaBinlogConsumer(int threadId,long timeout,Collection<String> topics,Consumer<JSONObject> channel) {
 		Properties props = new Properties();
 		try {
 			InputStream in = new FileInputStream(System.getProperty("user.dir")+"/conf/kafka.properties");
@@ -46,6 +46,10 @@ public class KafkaBinlogConsumer implements Runnable{
 			in.close();
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+		String clientid = props.getProperty("client.id", null);
+		if(clientid!=null){
+			props.setProperty("client.id", clientid+threadId);
 		}
 		
 		this.consumer = new KafkaConsumer<>(props);

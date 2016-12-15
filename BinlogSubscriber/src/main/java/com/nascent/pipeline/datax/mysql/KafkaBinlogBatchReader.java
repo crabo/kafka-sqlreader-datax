@@ -30,12 +30,14 @@ import com.alibaba.datax.common.spi.Reader;
 import com.alibaba.datax.common.statistics.PerfRecord;
 import com.alibaba.datax.common.statistics.PerfTrace;
 import com.alibaba.datax.common.util.Configuration;
+import com.nascent.pipeline.processor.mysql.MysqlProcessor;
 import com.nascent.pipeline.subscriber.KafkaBinlogConsumer;
 
 public class KafkaBinlogBatchReader extends Reader {
 	public static class Job extends Reader.Job {
 		public static final String KEY_TOPIC="topics";
 		
+		public static Map<String,String> IgnoreTables;
         private static final Logger LOG = LoggerFactory
                 .getLogger(Job.class);
         private Configuration originConfig = null;
@@ -48,7 +50,7 @@ public class KafkaBinlogBatchReader extends Reader {
         
         @Override
 		public void prepare() {
-        	
+        	IgnoreTables = new MysqlProcessor().IgnoreTables;
         }
         @Override
 		public void post() {
@@ -93,6 +95,7 @@ public class KafkaBinlogBatchReader extends Reader {
         private int batch_interval;
         private int tsAdjust;//初次从mysql取得timestamp时，sql语句需要调节到更早的时间？
         private int fetchSize;
+        private int kafkaBatchSize;
         private String tsStart;
         KafkaBinlogConsumer comsumer;
         Map<String,Long> ExecutingTimestamps;
@@ -123,6 +126,7 @@ public class KafkaBinlogBatchReader extends Reader {
             this.password = readerSliceConfig.getString("password");
             this.jdbcUrl = readerSliceConfig.getString("jdbcUrl");
             this.querySql= readerSliceConfig.getString("querySql");
+            this.kafkaBatchSize = readerSliceConfig.getInt("kafkaBatchSize",50);
             this.fetchSize = readerSliceConfig.getInt("fetchSize",1000);
             this.tsAdjust = readerSliceConfig.getInt("tsAdjust",60000);
             this.tsStart = readerSliceConfig.getString("tsStart");
@@ -143,7 +147,7 @@ public class KafkaBinlogBatchReader extends Reader {
 		
 		@Override
 		public void prepare() {
-			batcher=new BatchExecutingInfo(this,batch_interval);
+			batcher=new BatchExecutingInfo(this,batch_interval,kafkaBatchSize);
 			ExecutingTimestamps=new HashMap<>();
 			tsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 		}
@@ -166,11 +170,15 @@ public class KafkaBinlogBatchReader extends Reader {
 			this.recordSender = recordSender;
 			
 			this.comsumer = KafkaBinlogConsumer.using(
+					this.getTaskId(),
 					this.readerSliceConfig.getString(Job.KEY_TOPIC).split(","), 
 				json->{
 					//kafka消息将排队等待进入blokingqueue； 并等待10s才执行,已存在的请求不再重复执行
-					batcher.addTaskIfAbsent(json.getString("Database"), json.getLong("Timestamp"));
-					this.comsumer.tryCommit(json.getString("KafkaTopic"),json.getLong("KafkaOffset"));
+					if(batcher.addTaskIfAbsent(
+							json.getString("Database"), 
+							json.getLong("Timestamp")) ){
+						this.comsumer.tryCommit(json.getString("KafkaTopic"),json.getLong("KafkaOffset"));
+					}
 				});
 			
 			this.comsumer.run();
@@ -190,10 +198,15 @@ public class KafkaBinlogBatchReader extends Reader {
 		 */
 		public void startRead(String database,long timestamp){
 			if(LOG.isDebugEnabled())
-				LOG.debug("task[{}] begin process message {}@{}",taskId,database,timestamp);
-			
+				LOG.debug("task[{}] begin process message {}@{} {}",taskId,database,timestamp,new Timestamp(timestamp).toString());
+			if(Job.IgnoreTables.containsKey(database)){
+				return;
+			}
 			String sql = this.getSql(database, timestamp);
 			executeSql(sql,database,null,this.recordSender,super.getTaskPluginCollector(),this.fetchSize);
+			
+			if(LOG.isDebugEnabled())
+				LOG.debug("task[{}] finish process message {}@{} {}",taskId,database,timestamp);
 		}
 		String getSql(String database,long timestamp){
 			if(!ExecutingTimestamps.containsKey(database))//首次执行，开始时间为binlog时间戳
@@ -213,8 +226,8 @@ public class KafkaBinlogBatchReader extends Reader {
 			synchronized (ExecutingTimestamps){
 				sql = this.querySql
 					.replace("$database", database)
-					.replace("$ts_start", tsFormat.format(new Timestamp( ExecutingTimestamps.get(database))) )
-					.replace("$ts_end", tsFormat.format(new Timestamp( tsNow)) );
+					.replace("$ts_start", new Timestamp(ExecutingTimestamps.get(database)).toString() )
+					.replace("$ts_end", new Timestamp( tsNow).toString() );
 				
 				ExecutingTimestamps.put(database, tsNow);//下次执行时，开始时间从当前tsNow开始计算
 			}

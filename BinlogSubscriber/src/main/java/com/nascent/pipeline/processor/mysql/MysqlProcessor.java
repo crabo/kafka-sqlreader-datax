@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.text.StrSubstitutor;
 import com.alibaba.fastjson.JSONObject;
 import com.nascent.pipeline.subscriber.xmltags.EventRoot;
@@ -21,6 +22,7 @@ import com.nascent.pipeline.subscriber.xmltags.TransMap;
 
 public class MysqlProcessor {
 	Properties config;
+	public Map<String,String> IgnoreTables;
 	public MysqlProcessor(){
 		config = new Properties();
 		try {
@@ -30,8 +32,20 @@ public class MysqlProcessor {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		
 		//this.ds = connect();
+		
+		IgnoreTables=new HashMap<>();
+		String[] ignores = config.getProperty("binlog.ignoreTables", "").split(",");
+		for(String table : ignores){
+			String[] dbTable = StringUtils.split(table, ".");
+			if(dbTable.length==2){
+				if(!IgnoreTables.containsKey(dbTable[0]))
+					IgnoreTables.put(dbTable[0],","+dbTable[1]+",");
+				else{
+					IgnoreTables.put(dbTable[0],IgnoreTables.get(dbTable[0])+dbTable[1]+",");
+				}
+			}
+		}
 	}
 	public static String getBoundSql(String sql, JSONObject json){
 		if(sql.indexOf("${Database}")<0)

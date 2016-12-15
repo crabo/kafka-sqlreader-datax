@@ -118,6 +118,12 @@ public enum MysqlType {
       return Field.create(Type.STRING, value);
     }
   },
+  BIT("bit") {
+    @Override
+    public Field toField(Object value) {
+      return Field.create(Type.BOOLEAN, value);
+    }
+  },
   ENUM("enum") {
     @Override
     public Field toField(Object value) {
