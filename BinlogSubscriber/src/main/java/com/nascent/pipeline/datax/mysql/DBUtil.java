@@ -439,7 +439,7 @@ public final class DBUtil {
         try {
             connection = connect(dataBaseType, url, user, pass);
             if (connection != null) {
-                if (dataBaseType.equals(dataBaseType.MySql) && checkSlave) {
+                if (dataBaseType.equals(DataBaseType.MySql) && checkSlave) {
                     //dataBaseType.MySql
                     boolean connOk = !isSlaveBehind(connection);
                     return connOk;

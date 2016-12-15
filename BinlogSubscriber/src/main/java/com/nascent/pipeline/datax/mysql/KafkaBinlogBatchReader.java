@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -30,6 +31,7 @@ import com.alibaba.datax.common.spi.Reader;
 import com.alibaba.datax.common.statistics.PerfRecord;
 import com.alibaba.datax.common.statistics.PerfTrace;
 import com.alibaba.datax.common.util.Configuration;
+import com.nascent.pipeline.datax.mysql.BatchExecutingInfo.ExecutingInfo;
 import com.nascent.pipeline.processor.mysql.MysqlProcessor;
 import com.nascent.pipeline.subscriber.KafkaBinlogConsumer;
 
@@ -37,6 +39,7 @@ public class KafkaBinlogBatchReader extends Reader {
 	public static class Job extends Reader.Job {
 		public static final String KEY_TOPIC="topics";
 		
+		public static Map<Integer,ArrayBlockingQueue<ExecutingInfo>> ShareMsgBus;
 		public static Map<String,String> IgnoreTables;
         private static final Logger LOG = LoggerFactory
                 .getLogger(Job.class);
@@ -64,16 +67,23 @@ public class KafkaBinlogBatchReader extends Reader {
 		@Override
 		public List<Configuration> split(int adviceNumber) {
 			List<Configuration> readerSplitConfigs = new ArrayList<Configuration>();
+			ShareMsgBus = new HashMap<>();
+			
+            int kafkaBatchSize = this.originConfig.getInt("kafkaBatchSize",50);
 			String topics = this.originConfig.getString(KEY_TOPIC,"");
 			String[] patitions = topics.split(";");
-			for (int i=0;i<patitions.length;i++) {//按照channel*partition建立足够多的kafka连接
-				for (int k=0;k<adviceNumber;k++)
-				{
-					Configuration splitedConfig = this.originConfig.clone();
-					splitedConfig.set(KEY_TOPIC, patitions[i]);
-					
-					readerSplitConfigs.add(splitedConfig);
-				}
+			
+			for(int i=0;i<adviceNumber;i++){
+				int k = i%patitions.length;
+				if(i<patitions.length){
+					ArrayBlockingQueue<ExecutingInfo> q = new ArrayBlockingQueue<>(kafkaBatchSize);
+					ShareMsgBus.put(i, q);
+				}else
+					ShareMsgBus.put(i, ShareMsgBus.get(k));//如topic size=2， 则0，2，4 指向的是同一个队列，同一组配置
+				
+				Configuration splitedConfig = this.originConfig.clone();
+				splitedConfig.set(KEY_TOPIC, patitions[k]);
+				readerSplitConfigs.add(splitedConfig);
 			}
 			return readerSplitConfigs;
 		}
@@ -95,7 +105,6 @@ public class KafkaBinlogBatchReader extends Reader {
         private int batch_interval;
         private int tsAdjust;//初次从mysql取得timestamp时，sql语句需要调节到更早的时间？
         private int fetchSize;
-        private int kafkaBatchSize;
         private String tsStart;
         KafkaBinlogConsumer comsumer;
         Map<String,Long> ExecutingTimestamps;
@@ -126,7 +135,6 @@ public class KafkaBinlogBatchReader extends Reader {
             this.password = readerSliceConfig.getString("password");
             this.jdbcUrl = readerSliceConfig.getString("jdbcUrl");
             this.querySql= readerSliceConfig.getString("querySql");
-            this.kafkaBatchSize = readerSliceConfig.getInt("kafkaBatchSize",50);
             this.fetchSize = readerSliceConfig.getInt("fetchSize",1000);
             this.tsAdjust = readerSliceConfig.getInt("tsAdjust",60000);
             this.tsStart = readerSliceConfig.getString("tsStart");
@@ -147,7 +155,7 @@ public class KafkaBinlogBatchReader extends Reader {
 		
 		@Override
 		public void prepare() {
-			batcher=new BatchExecutingInfo(this,batch_interval,kafkaBatchSize);
+			batcher=new BatchExecutingInfo(this,batch_interval,Job.ShareMsgBus.get(this.getTaskId()));
 			ExecutingTimestamps=new HashMap<>();
 			tsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 		}
@@ -205,8 +213,8 @@ public class KafkaBinlogBatchReader extends Reader {
 			String sql = this.getSql(database, timestamp);
 			executeSql(sql,database,null,this.recordSender,super.getTaskPluginCollector(),this.fetchSize);
 			
-			if(LOG.isDebugEnabled())
-				LOG.debug("task[{}] finish process message {}@{} {}",taskId,database,timestamp);
+			if(LOG.isTraceEnabled())
+				LOG.trace("task[{}] finish process message {}@{} {}",taskId,database,timestamp);
 		}
 		String getSql(String database,long timestamp){
 			if(!ExecutingTimestamps.containsKey(database))//首次执行，开始时间为binlog时间戳

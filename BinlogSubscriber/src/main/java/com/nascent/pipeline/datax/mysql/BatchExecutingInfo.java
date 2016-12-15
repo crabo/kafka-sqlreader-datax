@@ -5,6 +5,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.nascent.pipeline.datax.mysql.BatchExecutingInfo.ExecutingInfo;
 import com.nascent.pipeline.subscriber.KafkaBinlogConsumer;
 
 public class BatchExecutingInfo {
@@ -36,8 +37,8 @@ public class BatchExecutingInfo {
 	final ArrayBlockingQueue<ExecutingInfo> queue;
 	final KafkaBinlogBatchReader.Task task;
 	final int batch_interval_ms;
-	public BatchExecutingInfo(KafkaBinlogBatchReader.Task task,int batchMs,int readBatchSize){
-		this.queue=new ArrayBlockingQueue<>(readBatchSize);//足够多的待处理数据，防止<10s 的同一msg先后出入队列；
+	public BatchExecutingInfo(KafkaBinlogBatchReader.Task task,int batchMs,ArrayBlockingQueue<ExecutingInfo> q){
+		this.queue=q;//足够多的待处理数据，防止<10s 的同一msg先后出入队列；
 		this.task = task;
 		this.batch_interval_ms = batchMs;//合并10s内的多个请求
 		

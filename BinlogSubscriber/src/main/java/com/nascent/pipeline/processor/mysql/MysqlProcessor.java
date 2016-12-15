@@ -82,7 +82,7 @@ public class MysqlProcessor {
 		          li.add(record);
 	          }
 	          
-	          stmt.close();
+	          //stmt.close();
 	      }
 	      conn.commit();
 	    }catch(SQLException ex){
