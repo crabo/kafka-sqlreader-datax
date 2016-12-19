@@ -223,6 +223,7 @@ public class KafkaBinlogBatchReader extends Reader {
 					try {
 						ExecutingTimestamps.put(database, tsFormat.parse(tsStart).getTime());
 					} catch (ParseException e) {
+						LOG.warn("wrong 'tsStart' format: {}",e);
 						ExecutingTimestamps.put(database, timestamp-tsAdjust);//adjust 60s
 					}
 				}else
