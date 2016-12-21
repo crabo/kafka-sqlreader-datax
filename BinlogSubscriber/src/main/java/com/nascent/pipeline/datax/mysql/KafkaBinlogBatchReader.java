@@ -3,6 +3,7 @@ package com.nascent.pipeline.datax.mysql;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.text.ParseException;
@@ -11,8 +12,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
 
+import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +34,7 @@ import com.alibaba.datax.common.spi.Reader;
 import com.alibaba.datax.common.statistics.PerfRecord;
 import com.alibaba.datax.common.statistics.PerfTrace;
 import com.alibaba.datax.common.util.Configuration;
+import com.alibaba.fastjson.JSONObject;
 import com.nascent.pipeline.datax.mysql.BatchExecutingInfo.ExecutingInfo;
 import com.nascent.pipeline.processor.mysql.MysqlProcessor;
 import com.nascent.pipeline.subscriber.KafkaBinlogConsumer;
@@ -40,6 +44,7 @@ public class KafkaBinlogBatchReader extends Reader {
 		public static final String KEY_TOPIC="topics";
 		
 		public static Map<Integer,ArrayBlockingQueue<ExecutingInfo>> ShareMsgBus;
+		public static Map<Integer,KafkaBinlogConsumer> KafkaConsumers;
 		public static Map<String,String> IgnoreTables;
         private static final Logger LOG = LoggerFactory
                 .getLogger(Job.class);
@@ -54,20 +59,67 @@ public class KafkaBinlogBatchReader extends Reader {
         @Override
 		public void prepare() {
         	IgnoreTables = new MysqlProcessor().IgnoreTables;
+        	
+        	connectKafka();
         }
+        
+        private void connectKafka(){
+        	String topics = this.originConfig.getString(KEY_TOPIC,"");
+			String[] patitions = topics.split(";");
+			KafkaConsumers = new HashMap<>();
+			int i=0;
+			for(String topic:patitions)
+			{
+				final int topicSeq=i;
+				LOG.info("connecting kafka consumer[{}] to topic '{}'",topicSeq,topic);
+	        	KafkaBinlogConsumer comsumer = KafkaBinlogConsumer.using(
+	        			topicSeq,
+						topic.split(","), 
+						json->addTaskIfAbsent(topicSeq,json)
+					);
+				
+	        	KafkaConsumers.put(topicSeq,comsumer);
+				i++;
+			}
+        }
+        private boolean addTaskIfAbsent(int topicSeq,JSONObject json){
+        	ArrayBlockingQueue<ExecutingInfo> queue = ShareMsgBus.get(topicSeq);
+    		ExecutingInfo info = new ExecutingInfo(json.getString("Database"),json.getLong("Timestamp"));
+    		if(!queue.contains(info))
+    		{
+    			try {
+    				queue.put(info);//持续等待，直至队列数<100
+
+    				if(LOG.isDebugEnabled())
+    					LOG.debug("added kafka message {}@{}",json.getLong("Timestamp"),json.getString("Database"));
+    				
+    				KafkaConsumers.get(topicSeq)
+    					.tryCommit(json.getString("KafkaTopic"),json.getLong("KafkaOffset"));
+    				return true;
+    			} catch (InterruptedException e) {
+    				LOG.error("addTaskIfAbsent Interrupted:{}",e);
+    			}
+    		}
+    		return false;
+    	}
+        
         @Override
 		public void post() {
 		}
 
 		@Override
 		public void destroy() {
-			
+			for(KafkaBinlogConsumer comsumer: KafkaConsumers.values())
+			{
+				if(comsumer!=null)
+					comsumer.shutdown();
+			}
 		}
 		
 		@Override
 		public List<Configuration> split(int adviceNumber) {
 			List<Configuration> readerSplitConfigs = new ArrayList<Configuration>();
-			ShareMsgBus = new HashMap<>();
+			ShareMsgBus = new HashMap<>(adviceNumber);
 			
             int kafkaBatchSize = this.originConfig.getInt("kafkaBatchSize",50);
 			String topics = this.originConfig.getString(KEY_TOPIC,"");
@@ -78,8 +130,10 @@ public class KafkaBinlogBatchReader extends Reader {
 				if(i<patitions.length){
 					ArrayBlockingQueue<ExecutingInfo> q = new ArrayBlockingQueue<>(kafkaBatchSize);
 					ShareMsgBus.put(i, q);
-				}else
+				}else{
 					ShareMsgBus.put(i, ShareMsgBus.get(k));//如topic size=2， 则0，2，4 指向的是同一个队列，同一组配置
+					KafkaConsumers.put(i,KafkaConsumers.get(k));
+				}
 				
 				Configuration splitedConfig = this.originConfig.clone();
 				splitedConfig.set(KEY_TOPIC, patitions[k]);
@@ -106,7 +160,6 @@ public class KafkaBinlogBatchReader extends Reader {
         private int tsAdjust;//初次从mysql取得timestamp时，sql语句需要调节到更早的时间？
         private int fetchSize;
         private String tsStart;
-        KafkaBinlogConsumer comsumer;
         Map<String,Long> ExecutingTimestamps;
         SimpleDateFormat tsFormat;
         
@@ -155,7 +208,6 @@ public class KafkaBinlogBatchReader extends Reader {
 		
 		@Override
 		public void prepare() {
-			batcher=new BatchExecutingInfo(this,batch_interval,Job.ShareMsgBus.get(this.getTaskId()));
 			ExecutingTimestamps=new HashMap<>();
 			tsFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 		}
@@ -167,46 +219,48 @@ public class KafkaBinlogBatchReader extends Reader {
 
 		@Override
 		public void destroy() {
-			if(comsumer!=null)
-				comsumer.shutdown();
+			
 		}
 
-		BatchExecutingInfo batcher;
 		RecordSender recordSender;
+		ArrayBlockingQueue<ExecutingInfo> queue;
 		@Override
 		public void startRead(RecordSender recordSender) {
 			this.recordSender = recordSender;
+			this.queue = Job.ShareMsgBus.get(this.getTaskId());
 			
-			this.comsumer = KafkaBinlogConsumer.using(
-					this.getTaskId(),
-					this.readerSliceConfig.getString(Job.KEY_TOPIC).split(","), 
-				json->{
-					//kafka消息将排队等待进入blokingqueue； 并等待10s才执行,已存在的请求不再重复执行
-					if(batcher.addTaskIfAbsent(
-							json.getString("Database"), 
-							json.getLong("Timestamp")) ){
-						this.comsumer.tryCommit(json.getString("KafkaTopic"),json.getLong("KafkaOffset"));
-					}
-				});
-			
-			this.comsumer.run();
+			Job.KafkaConsumers.get(this.getTaskId()).runAsThread();
 			LOG.info("task[{}] start consuming kafka topic '{}'",taskId,this.readerSliceConfig.getString(Job.KEY_TOPIC));
+			
+			while(true){
+        		try{
+        			daemonCheck();
+            	} catch (InterruptedException e) {
+            		LOG.error("task[{}] daemonCheck error:{}",taskId,e);
+    			}
+        	}
 		}
-		
-		/*void addTaskIfAbsent(String database,long timestamp){
-			if(!ExecutingTimestamps.containsKey(database) || 
-					System.currentTimeMillis()-ExecutingTimestamps.get(database)
-						>this.batch_interval ){
-				startRead(database,timestamp);
+		/**
+		 * 未达到10s等待时间的数据不允许出队列
+		 */
+		private void daemonCheck() throws InterruptedException{
+			if(queue.isEmpty()){
+				Thread.sleep(2000);
 			}
-		}*/
+			//统一个select 至少间隔时间，如10s
+			else if(System.currentTimeMillis() - queue.peek().addedTime>this.batch_interval){
+				//仅当前startRead完成， 才会读取队列下一个execInfo
+				ExecutingInfo e = queue.poll();
+				this.startRead(e.database,e.timestamp);
+			}else{
+				Thread.sleep(300);
+			}
+		}
 		
 		/**
 		 * 仅当前startRead完成， 才会读取队列下一个execInfo
 		 */
 		public void startRead(String database,long timestamp){
-			if(LOG.isDebugEnabled())
-				LOG.debug("task[{}] begin process message {}@{} {}",taskId,database,timestamp,new Timestamp(timestamp).toString());
 			if(Job.IgnoreTables.containsKey(database)){
 				return;
 			}
@@ -214,8 +268,9 @@ public class KafkaBinlogBatchReader extends Reader {
 			executeSql(sql,database,null,this.recordSender,super.getTaskPluginCollector(),this.fetchSize);
 			
 			if(LOG.isTraceEnabled())
-				LOG.trace("task[{}] finish process message {}@{} {}",taskId,database,timestamp);
+				LOG.trace("task[{}] finish process message {}@{}",taskId,timestamp,database);
 		}
+		final int ONE_DATE_MS=86400000;
 		String getSql(String database,long timestamp){
 			if(!ExecutingTimestamps.containsKey(database))//首次执行，开始时间为binlog时间戳
 			{
@@ -231,15 +286,21 @@ public class KafkaBinlogBatchReader extends Reader {
 			}
 			
 			String sql;
-			long tsNow=System.currentTimeMillis();
+			long tsEnd=System.currentTimeMillis();
+			if(tsEnd-ExecutingTimestamps.get(database)>ONE_DATE_MS)
+				tsEnd = ExecutingTimestamps.get(database)+ONE_DATE_MS;
+			
 			synchronized (ExecutingTimestamps){
 				sql = this.querySql
 					.replace("$database", database)
 					.replace("$ts_start", new Timestamp(ExecutingTimestamps.get(database)).toString() )
-					.replace("$ts_end", new Timestamp( tsNow).toString() );
+					.replace("$ts_end", new Timestamp( tsEnd).toString() );
 				
-				ExecutingTimestamps.put(database, tsNow);//下次执行时，开始时间从当前tsNow开始计算
+				ExecutingTimestamps.put(database, tsEnd);//下次执行时，开始时间从当前tsNow开始计算
 			}
+			
+			if(LOG.isDebugEnabled())
+				LOG.debug("task[{}] reading sql ts_end='{}' {}@{}",taskId,new Timestamp(tsEnd),timestamp,database);
 			return sql;
 		}
 		
@@ -281,7 +342,7 @@ public class KafkaBinlogBatchReader extends Reader {
 			              metaData, columnNumber, database, taskPluginCollector);
 			      lastTime = System.nanoTime();
 			  }
-			
+			  
 			  allResultPerfRecord.end(rsNextUsedTime);
 			
 			}catch (Exception e) {
@@ -289,6 +350,12 @@ public class KafkaBinlogBatchReader extends Reader {
               	.asDataXException(GenericErrorCode.ERROR,
               			"readRecord error: "+database,e);
 			} finally {
+				try {
+					if(rs!=null)
+						rs.close();
+				} catch (SQLException e) {
+					LOG.warn("close resultset error: {}",e);
+				}
 			  DBUtil.closeDBResources(null, conn);
 			}
 		}

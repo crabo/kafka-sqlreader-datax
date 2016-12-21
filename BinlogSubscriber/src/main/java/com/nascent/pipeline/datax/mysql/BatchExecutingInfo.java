@@ -57,9 +57,9 @@ public class BatchExecutingInfo {
 				if(i>100){
 					i=0;
 					
-					LOGGER.info("added kafka message {}@{}",database,timestamp);
+					LOGGER.info("added kafka message {}@{}",timestamp,database);
 				}else if(LOGGER.isDebugEnabled())
-					LOGGER.debug("added kafka message {}@{}",database,timestamp);
+					LOGGER.debug("added kafka message {}@{}",timestamp,database);
 				
 				return true;
 			} catch (InterruptedException e) {

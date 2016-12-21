@@ -165,7 +165,6 @@ public class KafkaBinlogReader extends Reader {
 		public void startRead(RecordSender recordSender) {
 			int fetchSize = this.readerSliceConfig.getInt("fetch_size",1000);
 			this.comsumer = KafkaBinlogConsumer.using(
-					this.getTaskId(),
 					this.readerSliceConfig.getString(Job.KEY_TOPIC,"")
 					.split(","), json->{
 				Job.EventPolicy.route(

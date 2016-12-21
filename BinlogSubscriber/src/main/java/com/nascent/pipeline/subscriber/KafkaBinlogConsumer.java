@@ -31,13 +31,16 @@ public class KafkaBinlogConsumer implements Runnable{
 	
 	private final Consumer<JSONObject> eventsConsumer;
 	
-	 public static KafkaBinlogConsumer using(int threadId,String[] topics,Consumer<JSONObject> channel) {
-		 return new KafkaBinlogConsumer(threadId,1000, Arrays.asList(topics),channel);
+	public static KafkaBinlogConsumer using(String[] topics,Consumer<JSONObject> channel) {
+		 return new KafkaBinlogConsumer(0,1000, Arrays.asList(topics),channel);
     }
+	public static KafkaBinlogConsumer using(int clientSeq,String[] topics,Consumer<JSONObject> channel) {
+		 return new KafkaBinlogConsumer(clientSeq,1000, Arrays.asList(topics),channel);
+   }
 
 	
 	KafkaConsumer<String,String> consumer;
-	private KafkaBinlogConsumer(int threadId,long timeout,Collection<String> topics,Consumer<JSONObject> channel) {
+	private KafkaBinlogConsumer(int clientSeq,long timeout,Collection<String> topics,Consumer<JSONObject> channel) {
 		Properties props = new Properties();
 		try {
 			InputStream in = new FileInputStream(System.getProperty("user.dir")+"/conf/kafka.properties");
@@ -49,7 +52,7 @@ public class KafkaBinlogConsumer implements Runnable{
 		}
 		String clientid = props.getProperty("client.id", null);
 		if(clientid!=null){
-			props.setProperty("client.id", clientid+threadId);
+			props.setProperty("client.id", clientid+clientSeq);
 		}
 		
 		this.consumer = new KafkaConsumer<>(props);
@@ -74,6 +77,17 @@ public class KafkaBinlogConsumer implements Runnable{
         	consumer.close();
         }
     }
+	
+	AtomicBoolean started=new AtomicBoolean(false);
+	public void runAsThread(){
+		if(started.get()) return;
+		started.set(true);
+		
+		Thread dm = new Thread(this);
+		dm.setDaemon(true);
+		dm.setName("kafka-client");
+		dm.start();
+	}
 
     private void processRecord(ConsumerRecord<String, String> record) {
         try {
@@ -92,8 +106,10 @@ public class KafkaBinlogConsumer implements Runnable{
     }
 
     public void shutdown() {
-        closed.set(true);
-        consumer.wakeup();
+    	if(!closed.get()){
+	        closed.set(true);
+	        consumer.wakeup();
+    	}
     }
     
     /**
