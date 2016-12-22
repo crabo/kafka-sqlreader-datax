@@ -21,7 +21,7 @@
                         "fetchSize":1000,
 						"username": "****",
 						"password": "",
-                        "jdbcUrl": "jdbc:mysql://192.168.1.240:3306/tradedata",
+                        "jdbcUrl": "jdbc:mysql://192.168.1.240:3306/tradedata?characterEncoding=utf-8&useCursorFetch=true",
                         "querySql": "select Nick,CreateTime,  CustomerName,  UserType,  Sex,  RegisterTime,  LastVisitTime,  Birthday,  Mobile,  QQ,  Score,  GoodCount,  NeutralCount,  BadCount,  MemberGrade,  MemberStatus,  VipInfo,  PriceUnit,  CountUnit,  ItemUnit,  Zip,  Province,  City,  Country,  District, BuyerImpression,  BuyerLevel,  RefundTimes,  RefundAmount,  CustomerFrom,  LatestCallOnTime,  Remark,  OrderTimes,  OrderAmount,  LastOrderTime,  PayTimes,  PayAmount,  LastPayTime,  TradeTimes,  TradeAmount,  LastTradeTime,  SmsTimes,  LastSmsTime,  SmsRate,  EmailTimes,  LastEmailTime,  EmailRate,  JhsTimes,  StepTimes,  StepAmount,  FirstPayTime,  SecondPayTime,  FirstJoinTime
 FROM $database.kd_customer c where c.CreateTime>='$ts_start' and c.CreateTime<'$ts_end' limit 1100 "
 					}

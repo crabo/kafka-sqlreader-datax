@@ -189,9 +189,9 @@ public class KafkaBinlogBatchReader extends Reader {
             this.jdbcUrl = readerSliceConfig.getString("jdbcUrl");
             this.querySql= readerSliceConfig.getString("querySql");
             this.fetchSize = readerSliceConfig.getInt("fetchSize",1000);
-            this.tsAdjust = readerSliceConfig.getInt("tsAdjust",60000);
             this.tsStart = readerSliceConfig.getString("tsStart");
             
+            this.tsAdjust = readerSliceConfig.getInt("tsAdjust",0)*1000;
             this.batch_interval = readerSliceConfig.getInt("batch_interval_sec",10)*1000;
             
             if(this.querySql==null)
@@ -270,7 +270,6 @@ public class KafkaBinlogBatchReader extends Reader {
 			if(LOG.isTraceEnabled())
 				LOG.trace("task[{}] finish process message {}@{}",taskId,timestamp,database);
 		}
-		final int ONE_DATE_MS=86400000;
 		String getSql(String database,long timestamp){
 			if(!ExecutingTimestamps.containsKey(database))//首次执行，开始时间为binlog时间戳
 			{
@@ -279,17 +278,14 @@ public class KafkaBinlogBatchReader extends Reader {
 						ExecutingTimestamps.put(database, tsFormat.parse(tsStart).getTime());
 					} catch (ParseException e) {
 						LOG.warn("wrong 'tsStart' format: {}",e);
-						ExecutingTimestamps.put(database, timestamp-tsAdjust);//adjust 60s
+						ExecutingTimestamps.put(database, timestamp);
 					}
 				}else
-				    ExecutingTimestamps.put(database, timestamp-tsAdjust);//adjust 60s
+				    ExecutingTimestamps.put(database, timestamp);
 			}
 			
 			String sql;
-			long tsEnd=System.currentTimeMillis();
-			if(tsEnd-ExecutingTimestamps.get(database)>ONE_DATE_MS)
-				tsEnd = ExecutingTimestamps.get(database)+ONE_DATE_MS;
-			
+			long tsEnd = System.currentTimeMillis()-this.tsAdjust;
 			synchronized (ExecutingTimestamps){
 				sql = this.querySql
 					.replace("$database", database)
@@ -304,6 +300,18 @@ public class KafkaBinlogBatchReader extends Reader {
 			return sql;
 		}
 		
+		/**
+		 * 要一条SQL从服务器读取大量数据，不发生JVM OOM，可以采用以下方法之一：
+
+		1、当statement设置以下属性时，采用的是流数据接收方式，每次只从服务器接收部份数据，直到所有数据处理完毕。
+          stmt.setResultSetType(ResultSet.TYPE_FORWARD_ONLY);
+          stmt.setFetchSize(Integer.MIN_VALUE); 
+		2、调用statement的enableStreamingResults方法，实际上enableStreamingResults方法内部封装的就是第1种方式。
+		3、设置连接属性useCursorFetch=true (5.0版驱动开始支持)，TYPE_FORWARD_ONLY+fetch size参数，表示采用服务器端游标，每次从服务器取fetch_size条数据。
+			stmt.setResultSetType(ResultSet.TYPE_FORWARD_ONLY);
+            stmt.setFetchSize(1000);//任意>0 的fetch大小
+                               如：jdbc:mysql://192.168.1.252:3306/testdb?charsetEncoding=utf8&useCursorFetch=true
+		 */
 		private void executeSql(String querySql,String database,String mandatoryEncoding,
                 RecordSender recordSender,
                 TaskPluginCollector taskPluginCollector, int fetchSize) {
