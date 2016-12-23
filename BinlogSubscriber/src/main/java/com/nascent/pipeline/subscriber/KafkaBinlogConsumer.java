@@ -50,6 +50,8 @@ public class KafkaBinlogConsumer implements Runnable{
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		mergeSystemArgs(props);
+		
 		String clientid = props.getProperty("client.id", null);
 		if(clientid!=null){
 			props.setProperty("client.id", clientid+clientSeq);
@@ -60,12 +62,28 @@ public class KafkaBinlogConsumer implements Runnable{
 		this.topics = topics;
 		this.eventsConsumer = channel;
 	}
+	void mergeSystemArgs(Properties props){
+		if(System.getProperty("bootstrap.servers")!=null)
+			props.setProperty("bootstrap.servers", System.getProperty("bootstrap.servers"));
+		if(System.getProperty("job_id")!=null)//job_id 前缀
+		{
+			props.setProperty("group.id", System.getProperty("job_id")+
+					props.getProperty("group.id"));
+			props.setProperty("client.id", System.getProperty("job_id")+
+					props.getProperty("client.id"));
+		}else{
+			if(System.getProperty("group.id")!=null)
+				props.setProperty("group.id", System.getProperty("group.id"));
+			if(System.getProperty("client.id")!=null)
+				props.setProperty("client.id", System.getProperty("client.id"));
+		}
+	}
 	@Override
 	public void run() {
 		try {
 			consumer.subscribe(topics);
 			CommitedTimeStore = new HashMap<>();
-			LOGGER.info("subscribe to kafka ready ");
+			LOGGER.info("subscribe to kafka {} '{}' ready ",System.getProperty("bootstrap.servers"),String.join(",", topics));
 			
             while (!closed.get()) {
             	consumer.poll(timeout)

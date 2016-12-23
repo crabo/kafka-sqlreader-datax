@@ -1,3 +1,9 @@
+#####################
+java -server -Xmx1g -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=./log -Dfile.encoding=UTF-8 -Dlogback.statusListenerClass=ch.qos.logback.core.status.NopStatusListener -Ddatax.home=./ -Dlogback.configurationFile=./conf/logback.xml -classpath ./lib/*:. 
+-Dbinlog.ignoreTables=sys_info.% -Djob_id=no47
+com.alibaba.datax.core.Engine -mode standalone -jobid -1 -job ./job/binlog-job.json
+
+#####################
 {
     "job": {
         "setting": {
@@ -13,7 +19,7 @@
 				"reader": {
 					"name": "binlogreader",
 					"parameter": {
-                        "topics":"binlog2_slot",
+                        "topics":"$job_id_crm_customer",
                         "fetchSize":1000,
                         "batch_interval_sec":10,
                         "tsStart":"2014-12-01 00:00:01.000",

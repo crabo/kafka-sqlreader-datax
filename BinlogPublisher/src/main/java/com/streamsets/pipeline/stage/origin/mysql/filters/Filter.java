@@ -34,6 +34,8 @@ public interface Filter {
    * {@link Result#DISCARD} event is filtered out.
    */
   Result apply(EnrichedEvent event);
+  
+  Result apply(String db,String table);
 
   Filter and(Filter filter);
 

@@ -34,6 +34,11 @@ public class Filters {
       return Filter.Result.PASS;
     }
 
+	@Override
+	public Result apply(String db, String table) {
+		return Filter.Result.PASS;
+	}
+
     @Override
     public Filter and(Filter filter) {
       return Filters.and(this, filter);
@@ -70,6 +75,11 @@ public class Filters {
     public String toString() {
       return "Filters.DISCARD";
     }
+
+	@Override
+	public Result apply(String db, String table) {
+		return Result.DISCARD;
+	}
   };
 
   public static Filter and(Filter filter1, Filter filter2) {
@@ -111,6 +121,11 @@ public class Filters {
           ", filter2=" + filter2 +
           '}';
     }
+
+	@Override
+	public Result apply(String db, String table) {
+		return filter1.apply(db,table) == Result.PASS ? filter2.apply(db,table) : Result.DISCARD;
+	}
   }
 
   private static class OrFilter implements Filter {
@@ -144,5 +159,10 @@ public class Filters {
           ", filter2=" + filter2 +
           '}';
     }
+
+	@Override
+	public Result apply(String db, String table) {
+		return filter1.apply(db,table) == Result.PASS ? Result.PASS : filter2.apply(db,table);
+	}
   }
 }

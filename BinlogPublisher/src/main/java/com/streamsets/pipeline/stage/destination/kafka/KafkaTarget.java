@@ -39,9 +39,19 @@ public class KafkaTarget {//extends Thread
 		} catch (IOException e) {
 			LOG.warn("loading conf kafka.properties error",e);
 		}
+		mergeSystemArgs(props);
 		
 		this.producer = new KafkaProducer<String, String>(props);
 		this.kafkaMessage = new Message();
+	}
+	void mergeSystemArgs(Properties config){
+		String jobid=System.getProperty("job_id","");
+		if(jobid.length()>0){//
+			Properties args = System.getProperties();
+			config.setProperty("client.id",jobid+config.getProperty("client.id"));
+			if(args.getProperty("bootstrap.servers")!=null)
+				config.setProperty("bootstrap.servers",args.getProperty("bootstrap.servers"));
+		}
 	}
 	
 	public void send(Record rec) {
@@ -119,13 +129,19 @@ public class KafkaTarget {//extends Thread
 					
 					json.put("Data", (Map<String,Object>)record.getValue("Data"));
 					
-					ProducerRecord<String, String> msg = new ProducerRecord<String, String>(
-							kafkaMessage.getTopic(json),
-							kafkaMessage.getPartition(json),
-							kafkaMessage.getTimestamp(json),
-							kafkaMessage.getMessageId(json),
-							json.toJSONString());
-					producer.send(msg);
+					String topic=kafkaMessage.getTopic(json);
+					if(topic==null){
+						if(LOG.isDebugEnabled())
+							LOG.debug("skipping msg '{}/{}' with null topic",record.getValue("Database"),record.getValue("Table"));
+					}else{
+						ProducerRecord<String, String> msg = new ProducerRecord<String, String>(
+								topic,
+								kafkaMessage.getPartition(json),
+								kafkaMessage.getTimestamp(json),
+								kafkaMessage.getMessageId(json),
+								json.toJSONString());
+						producer.send(msg);
+					}
 				}
 				return;
 			} catch(Exception e) {

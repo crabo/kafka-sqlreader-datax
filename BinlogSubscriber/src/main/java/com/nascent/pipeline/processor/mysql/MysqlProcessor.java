@@ -35,7 +35,9 @@ public class MysqlProcessor {
 		//this.ds = connect();
 		
 		IgnoreTables=new HashMap<>();
-		String[] ignores = config.getProperty("binlog.ignoreTables", "").split(",");
+		String ignoreTable = System.getProperty("binlog.ignoreTables",
+							 config.getProperty("binlog.ignoreTables", ""));
+		String[] ignores = ignoreTable.split(",");
 		for(String table : ignores){
 			String[] dbTable = StringUtils.split(table, ".");
 			if(dbTable.length==2){

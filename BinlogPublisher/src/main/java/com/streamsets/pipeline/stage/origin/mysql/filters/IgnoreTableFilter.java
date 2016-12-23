@@ -43,12 +43,17 @@ public class IgnoreTableFilter implements Filter {
 
   @Override
   public Result apply(EnrichedEvent event) {
-    if (dbName.matcher(event.getTable().getDatabase().toLowerCase().trim()).matches() &&
-        tableName.matcher(event.getTable().getName().toLowerCase().trim()).matches()) {
-      return Result.DISCARD;
-    }
-    return Result.PASS;
+	  return apply(event.getTable().getDatabase(),event.getTable().getName());
   }
+
+	@Override
+	public Result apply(String db, String table) {
+		if (dbName.matcher(db.toLowerCase().trim()).matches() &&
+		        tableName.matcher(table.toLowerCase().trim()).matches()) {
+		      return Result.DISCARD;
+		    }
+		    return Result.PASS;
+	}
 
   @Override
   public Filter and(Filter filter) {
@@ -67,4 +72,5 @@ public class IgnoreTableFilter implements Filter {
         ", dbName=" + dbName +
         '}';
   }
+
 }

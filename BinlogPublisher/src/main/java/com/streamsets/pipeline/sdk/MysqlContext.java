@@ -35,8 +35,52 @@ public class MysqlContext {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		
+		mergeSystemArgs();
 		gtid_offset_file=config.getProperty("binlog.offset_file", "binlog_gtid.offset");
+	}
+	
+	/**
+	 * 如main传入了jobid参数，则遍历外部参数进行覆盖
+jdbc.url = jdbc:mysql://106.14.25/yfxdb
+jdbc.user= root
+jdbc.pwd = ***
+
+binlog.offset_file=binlog_gtid.offset
+binlog.includeTables = yfxdb.%
+binlog.ignoreTables  =
+
+
+topic.customer = *
+topic.trade = db1.customer%,db2,db3
+topic.behavior = db5,db6
+	 */
+	void mergeSystemArgs(){
+		String jobid=System.getProperty("job_id","");
+		if(jobid.length()>0){//
+			Properties args = System.getProperties();
+			config.setProperty("jdbc.url", args.getProperty("jdbc.url"));
+			config.setProperty("jdbc.user", args.getProperty("jdbc.user"));
+			config.setProperty("jdbc.pwd", args.getProperty("jdbc.pwd"));
+			
+			if(args.getProperty("binlog.includeTables")!=null)
+				config.setProperty("binlog.includeTables", args.getProperty("binlog.includeTables"));
+			if(args.getProperty("binlog.ignoreTables")!=null)
+				config.setProperty("binlog.ignoreTables", args.getProperty("binlog.ignoreTables"));
+			
+			config.setProperty("binlog.offset_file", jobid+config.getProperty("binlog.offset_file","binlog_gtid.offset"));
+			/*
+			for(Object key : args.keySet()){
+				String topic = (String)key;
+				if(topic.startsWith("topic.")){
+					if(config.getProperty(topic)!=null)
+					{
+						config.put(topic+jobid, args.getProperty(topic));//已存在，更名为topic+jobid
+						config.remove(topic);
+					}else 
+						config.put(topic, args.getProperty(topic));//新增的topic
+				}
+			}*/
+		}
 	}
 	
 	public String loadGtidfromFile(){

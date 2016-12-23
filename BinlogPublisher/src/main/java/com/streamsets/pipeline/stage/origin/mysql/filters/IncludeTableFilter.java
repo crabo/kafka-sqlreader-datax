@@ -44,12 +44,17 @@ public class IncludeTableFilter implements Filter {
 
   @Override
   public Result apply(EnrichedEvent event) {
-    if (dbName.matcher(event.getTable().getDatabase().toLowerCase().trim()).matches() &&
-        tableName.matcher(event.getTable().getName().toLowerCase().trim()).matches()) {
-      return Result.PASS;
-    }
-    return Result.DISCARD;
+	  return apply(event.getTable().getDatabase(),event.getTable().getName());
   }
+
+	@Override
+	public Result apply(String db, String table) {
+		if (dbName.matcher(db.toLowerCase().trim()).matches() &&
+		        tableName.matcher(table.toLowerCase().trim()).matches()) {
+		      return Result.PASS;
+		    }
+		    return Result.DISCARD;
+	}
 
   @Override
   public Filter and(Filter filter) {
@@ -68,4 +73,5 @@ public class IncludeTableFilter implements Filter {
         ", dbName=" + dbName +
         '}';
   }
+
 }
