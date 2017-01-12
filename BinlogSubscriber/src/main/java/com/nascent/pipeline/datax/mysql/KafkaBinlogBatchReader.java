@@ -42,9 +42,10 @@ import com.nascent.pipeline.subscriber.KafkaBinlogConsumer;
 public class KafkaBinlogBatchReader extends Reader {
 	public static class Job extends Reader.Job {
 		public static final String KEY_TOPIC="topics";
+		private static int KAFKA_BATCH_SIZE;
 		
-		public static Map<Integer,ArrayBlockingQueue<ExecutingInfo>> ShareMsgBus;
-		public static Map<Integer,KafkaBinlogConsumer> KafkaConsumers;
+		public static Map<String,ArrayBlockingQueue<ExecutingInfo>> ShareMsgBus;
+		public static Map<String,KafkaBinlogConsumer> KafkaConsumers;
 		public static Map<String,String> IgnoreTables;
         private static final Logger LOG = LoggerFactory
                 .getLogger(Job.class);
@@ -53,37 +54,44 @@ public class KafkaBinlogBatchReader extends Reader {
         @Override
 		public void init() {
 			this.originConfig = this.getPluginJobConf();
+			KAFKA_BATCH_SIZE=this.originConfig.getInt("kafkaBatchSize",100);
 		}
 
         
         @Override
 		public void prepare() {
         	IgnoreTables = new MysqlProcessor().IgnoreTables;
-        	
-        	connectKafka();
+        	KafkaConsumers = new HashMap<>();
+        	ShareMsgBus = new HashMap<>();
         }
         
-        private void connectKafka(){
-        	String topics = this.originConfig.getString(KEY_TOPIC,"");
-			String[] patitions = topics.split(";");
-			KafkaConsumers = new HashMap<>();
-			int i=0;
-			for(String topic:patitions)
-			{
-				final int topicSeq=i;
-				LOG.info("connecting kafka consumer[{}] to topic '{}'",topicSeq,topic);
-	        	KafkaBinlogConsumer comsumer = KafkaBinlogConsumer.using(
-	        			topicSeq,
-						topic.split(","), 
-						json->addTaskIfAbsent(topicSeq,json)
-					);
-				
-	        	KafkaConsumers.put(topicSeq,comsumer);
-				i++;
-			}
+        public static ArrayBlockingQueue<ExecutingInfo> connectKafka(String topic,int seq){
+        	if(!KafkaConsumers.containsKey(topic)){
+        		synchronized (KafkaConsumers){
+        			if(!KafkaConsumers.containsKey(topic)){
+	        			if(!ShareMsgBus.containsKey(topic)){//Msgbus connect to consumer
+	        				ShareMsgBus.put(topic, new ArrayBlockingQueue<ExecutingInfo>(KAFKA_BATCH_SIZE));
+	        			}
+        				
+        				LOG.info("connecting kafka consumer[{}] to topic '{}'",seq,topic);
+        	        	KafkaBinlogConsumer consumer = KafkaBinlogConsumer.using(
+        	        			seq,
+        						topic.split(","), 
+        						json->addTaskIfAbsent(topic,seq,json)
+        					);
+        				
+        	        	KafkaConsumers.put(topic,consumer);
+        	        	
+        	        	//START reading!
+        	        	consumer.runAsThread();
+        			}
+        		}
+        	}
+        	return ShareMsgBus.get(topic);
         }
-        private boolean addTaskIfAbsent(int topicSeq,JSONObject json){
-        	ArrayBlockingQueue<ExecutingInfo> queue = ShareMsgBus.get(topicSeq);
+        private static boolean addTaskIfAbsent(String topic,int seq,JSONObject json){
+        	ArrayBlockingQueue<ExecutingInfo> queue = ShareMsgBus.get(topic);
+        	
     		ExecutingInfo info = new ExecutingInfo(json.getString("Database"),json.getLong("Timestamp"));
     		if(!queue.contains(info))
     		{
@@ -93,7 +101,7 @@ public class KafkaBinlogBatchReader extends Reader {
     				if(LOG.isDebugEnabled())
     					LOG.debug("added kafka message {}@{}",json.getLong("Timestamp"),json.getString("Database"));
     				
-    				KafkaConsumers.get(topicSeq)
+    				KafkaConsumers.get(topic)
     					.tryCommit(json.getString("KafkaTopic"),json.getLong("KafkaOffset"));
     				return true;
     			} catch (InterruptedException e) {
@@ -119,24 +127,9 @@ public class KafkaBinlogBatchReader extends Reader {
 		@Override
 		public List<Configuration> split(int adviceNumber) {
 			List<Configuration> readerSplitConfigs = new ArrayList<Configuration>();
-			ShareMsgBus = new HashMap<>(adviceNumber);
-			
-            int kafkaBatchSize = this.originConfig.getInt("kafkaBatchSize",50);
-			String topics = this.originConfig.getString(KEY_TOPIC,"");
-			String[] patitions = topics.split(";");
-			
-			for(int i=0;i<adviceNumber;i++){
-				int k = i%patitions.length;
-				if(i<patitions.length){
-					ArrayBlockingQueue<ExecutingInfo> q = new ArrayBlockingQueue<>(kafkaBatchSize);
-					ShareMsgBus.put(i, q);
-				}else{
-					ShareMsgBus.put(i, ShareMsgBus.get(k));//如topic size=2， 则0，2，4 指向的是同一个队列，同一组配置
-					KafkaConsumers.put(i,KafkaConsumers.get(k));
-				}
-				
+			int partition = (adviceNumber/3)+1;
+			for(int i=0;i<partition;i++){
 				Configuration splitedConfig = this.originConfig.clone();
-				splitedConfig.set(KEY_TOPIC, patitions[k]);
 				readerSplitConfigs.add(splitedConfig);
 			}
 			return readerSplitConfigs;
@@ -227,10 +220,11 @@ public class KafkaBinlogBatchReader extends Reader {
 		@Override
 		public void startRead(RecordSender recordSender) {
 			this.recordSender = recordSender;
-			this.queue = Job.ShareMsgBus.get(this.getTaskId());
 			
-			Job.KafkaConsumers.get(this.getTaskId()).runAsThread();
-			LOG.info("task[{}] start consuming kafka topic '{}'",taskId,this.readerSliceConfig.getString(Job.KEY_TOPIC));
+			String topic = this.readerSliceConfig.getString(Job.KEY_TOPIC);
+			this.queue = Job.connectKafka(topic,taskId);
+			
+			LOG.info("task[{}] start consuming kafka topic '{}'",taskId,topic);
 			
 			while(true){
         		try{

@@ -29,7 +29,7 @@
   <properties>
   	<java.version>1.8</java.version>
     <mysql-connector-java.version>5.1.39</mysql-connector-java.version>
-    <mysql-binlog-connector-java.version>0.4.0</mysql-binlog-connector-java.version>
+    <mysql-binlog-connector-java.version>0.8.0</mysql-binlog-connector-java.version>
     <guava.version>19.0</guava.version>
   </properties>
 
@@ -68,7 +68,7 @@
     <dependency>
         <groupId>com.github.shyiko</groupId>
         <artifactId>mysql-binlog-connector-java</artifactId>
-        <version>0.6.0</version>
+        <version>${mysql-binlog-connector-java.version}</version>
     </dependency>
     <dependency>
          <groupId>com.zaxxer</groupId>

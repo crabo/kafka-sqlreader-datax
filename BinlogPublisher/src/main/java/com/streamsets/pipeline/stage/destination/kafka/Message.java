@@ -103,12 +103,12 @@ topic.topic_slot_2 = db%.table2%,db6
 				String topic=key.substring(6);
 				String val = (String)prop.getValue();
 				
+				LOG.info("match tables '{}' to kafka topic '{}'",val,topic);
 				topicMap.put(
 					topic, 
 					createIncludeFilter(val)
 				);
 				i++;
-				LOG.info("match tables '{}' to kafka topic '{}'",val,topic);
 			}
 		}
 		LOG.info("==register to {}# kafka topics==",i);

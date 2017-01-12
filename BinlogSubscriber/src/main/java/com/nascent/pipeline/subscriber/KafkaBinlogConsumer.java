@@ -28,6 +28,7 @@ public class KafkaBinlogConsumer implements Runnable{
 	private final AtomicBoolean closed = new AtomicBoolean(false);
 	private final long timeout;
 	private final Collection<String> topics;
+	private String bootstrapServers;
 	
 	private final Consumer<JSONObject> eventsConsumer;
 	
@@ -60,11 +61,15 @@ public class KafkaBinlogConsumer implements Runnable{
 		this.consumer = new KafkaConsumer<>(props);
 		this.timeout = timeout;
 		this.topics = topics;
+		if(channel==null)
+			throw new IllegalArgumentException("Kafka consumer 'output channel' can't be null!");
 		this.eventsConsumer = channel;
 	}
 	void mergeSystemArgs(Properties props){
 		if(System.getProperty("bootstrap.servers")!=null)
 			props.setProperty("bootstrap.servers", System.getProperty("bootstrap.servers"));
+		
+		bootstrapServers=props.getProperty("bootstrap.servers");
 		if(System.getProperty("job_id")!=null)//job_id 前缀
 		{
 			props.setProperty("group.id", System.getProperty("job_id")+
@@ -83,7 +88,7 @@ public class KafkaBinlogConsumer implements Runnable{
 		try {
 			consumer.subscribe(topics);
 			CommitedTimeStore = new HashMap<>();
-			LOGGER.info("subscribe to kafka {} '{}' ready ",System.getProperty("bootstrap.servers"),String.join(",", topics));
+			LOGGER.info("subscribe to kafka {} '{}' ready ",bootstrapServers,String.join(",", topics));
 			
             while (!closed.get()) {
             	consumer.poll(timeout)
@@ -119,6 +124,7 @@ public class KafkaBinlogConsumer implements Runnable{
     		//Thread.sleep(1900); delay msg throughput for test purpose
         	eventsConsumer.accept(json);
         } catch (Exception e) {
+        	e.printStackTrace();
             LOGGER.warn("Exception processing message 'offset={}': {}",record.offset(), e);
         }
     }

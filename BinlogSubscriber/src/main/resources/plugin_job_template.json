@@ -21,6 +21,8 @@ com.alibaba.datax.core.Engine -mode standalone -jobid -1 -job ./job/binlog-job.j
 					"parameter": {
                         "topics":"$job_id_crm_customer",
                         "fetchSize":1000,
+                        "kafkaBatchSize":100,
+                        
                         "batch_interval_sec":10,
                         "tsStart":"2014-12-01 00:00:01.000",
                         
