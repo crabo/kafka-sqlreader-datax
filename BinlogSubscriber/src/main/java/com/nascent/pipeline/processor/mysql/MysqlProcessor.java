@@ -4,6 +4,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -57,20 +58,40 @@ public class MysqlProcessor {
 	}
 	
 	/**
+	 * 获取每个店铺当前同步进度ts_start
+	 * @param database
+	 * @return
+	 */
+	public String getTimestamp(String database){
+		String sql = config.getProperty("jdbc.querySql")
+						.replace("$ts_key", database);
+
+		try (Connection conn = connect()){
+			ResultSet rs =conn.createStatement()
+					.executeQuery(sql);
+			if(rs.next())
+				return rs.getString(1);
+		}catch(Exception ex){
+	    	throw new RuntimeException(sql,ex);
+	    }
+		return null;
+	}
+	
+	/**
 	 * 结果集完全由sql决定，不再进行mapping
 	 * 输出ArrayList of Map
 	 * @param sql
 	 * @param json
 	 */
 	public void process(String sql, JSONObject json){
-		List<Map<String,Object>> li = execute(getBoundSql(sql,json));
+		List<Map<String,Object>> li = executeQuery(getBoundSql(sql,json));
 		json.put("Result",li);
 	}
 	
-	protected List<Map<String,Object>> execute(String sql){
+	protected List<Map<String,Object>> executeQuery(String sql){
 		List<Map<String,Object>> li = new ArrayList<>();
 		
-	    try (Connection conn = null){//ds.getConnection()) {
+	    try (Connection conn = connect()){
 	        try (Statement stmt = conn.createStatement()) {
 	          ResultSet rs = stmt.executeQuery(sql);
 	          
@@ -87,20 +108,40 @@ public class MysqlProcessor {
 	          //stmt.close();
 	      }
 	      conn.commit();
-	    }catch(SQLException ex){
-	    	
+	    }catch(Exception ex){
+	    	throw new RuntimeException(sql,ex);
 	    }
 	    return li;
 	  }
-	/*
-	HikariDataSource ds;
-	protected HikariDataSource connect() {
-	    HikariConfig hikariConfig = new HikariConfig();
+	
+	private int executeUpdate(String sql){
+		int count=0;
+	    try (Connection conn = connect()) {
+	        try (Statement stmt = conn.createStatement()) {
+	          count = stmt.executeUpdate(sql);
+	          stmt.close();
+	      }
+	      conn.close();
+	    }
+	    catch(Exception ex){
+	    	throw new RuntimeException(sql,ex);
+	    }
+	    return count;
+	  }
+	
+	
+	protected Connection connect() throws Exception{
+		Class.forName("com.mysql.jdbc.Driver");
+		return DriverManager.getConnection(
+				config.getProperty("jdbc.url"), 
+				config.getProperty("jdbc.user"), 
+				config.getProperty("jdbc.pwd"));
+	    /*HikariConfig hikariConfig = new HikariConfig();
 	    hikariConfig.setJdbcUrl(config.getProperty("jdbc.url"));
 	    hikariConfig.setUsername(config.getProperty("jdbc.user"));
 	    hikariConfig.setPassword(config.getProperty("jdbc.pwd"));
 	    hikariConfig.addDataSourceProperty("useSSL", false);
 	    hikariConfig.setAutoCommit(false);
-	    return new HikariDataSource(hikariConfig);
-	}*/
+	    return new HikariDataSource(hikariConfig);*/
+	}
 }

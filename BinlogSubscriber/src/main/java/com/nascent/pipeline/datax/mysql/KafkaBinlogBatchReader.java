@@ -46,7 +46,7 @@ public class KafkaBinlogBatchReader extends Reader {
 		
 		public static Map<String,ArrayBlockingQueue<ExecutingInfo>> ShareMsgBus;
 		public static Map<String,KafkaBinlogConsumer> KafkaConsumers;
-		public static Map<String,String> IgnoreTables;
+		public static MysqlProcessor MysqlConfiger;
         private static final Logger LOG = LoggerFactory
                 .getLogger(Job.class);
         private Configuration originConfig = null;
@@ -60,7 +60,7 @@ public class KafkaBinlogBatchReader extends Reader {
         
         @Override
 		public void prepare() {
-        	IgnoreTables = new MysqlProcessor().IgnoreTables;
+        	MysqlConfiger = new MysqlProcessor();
         	KafkaConsumers = new HashMap<>();
         	ShareMsgBus = new HashMap<>();
         }
@@ -152,7 +152,7 @@ public class KafkaBinlogBatchReader extends Reader {
         private int batch_interval;
         private int tsAdjust;//初次从mysql取得timestamp时，sql语句需要调节到更早的时间？
         private int fetchSize;
-        private String tsStart;
+        //private String tsStart;
         Map<String,Long> ExecutingTimestamps;
         SimpleDateFormat tsFormat;
         
@@ -182,7 +182,7 @@ public class KafkaBinlogBatchReader extends Reader {
             this.jdbcUrl = readerSliceConfig.getString("jdbcUrl");
             this.querySql= readerSliceConfig.getString("querySql");
             this.fetchSize = readerSliceConfig.getInt("fetchSize",1000);
-            this.tsStart = readerSliceConfig.getString("tsStart");
+            //this.tsStart = readerSliceConfig.getString("tsStart");
             
             this.tsAdjust = readerSliceConfig.getInt("tsAdjust",0)*1000;
             this.batch_interval = readerSliceConfig.getInt("batch_interval_sec",10)*1000;
@@ -255,7 +255,7 @@ public class KafkaBinlogBatchReader extends Reader {
 		 * 仅当前startRead完成， 才会读取队列下一个execInfo
 		 */
 		public void startRead(String database,long timestamp){
-			if(Job.IgnoreTables.containsKey(database)){
+			if(Job.MysqlConfiger.IgnoreTables.containsKey(database)){
 				return;
 			}
 			String sql = this.getSql(database, timestamp);
@@ -267,9 +267,12 @@ public class KafkaBinlogBatchReader extends Reader {
 		String getSql(String database,long timestamp){
 			if(!ExecutingTimestamps.containsKey(database))//首次执行，开始时间为binlog时间戳
 			{
-				if(this.tsStart!=null){
+				String tsStart = Job.MysqlConfiger.getTimestamp(database);
+				if(tsStart!=null){//数据库中已记住进度时间戳?
 					try {
-						ExecutingTimestamps.put(database, tsFormat.parse(tsStart).getTime());
+						ExecutingTimestamps.put(database, 
+								tsFormat.parse(tsStart).getTime()
+							);
 					} catch (ParseException e) {
 						LOG.warn("wrong 'tsStart' format: {}",e);
 						ExecutingTimestamps.put(database, timestamp);
